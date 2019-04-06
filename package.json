@@ -1,5 +1,5 @@
 {
-  "name": "secret",
+  "name": "@redeemerbc/secret",
   "version": "1.0.0",
   "description": "A basic secret-management API built on Google Cloud Firestore",
   "main": "index.js",
