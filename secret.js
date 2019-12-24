@@ -1,43 +1,63 @@
 const ow = require('ow')
-const {Firestore} = require('@google-cloud/firestore')
+const {SecretManagerServiceClient} = require('@google-cloud/secret-manager')
 
 class Secret {
-  constructor(secretName) {
-    ow(secretName, ow.string)
-    this.secretName = secretName
+  constructor(options = {}) {
+    ow(options, ow.object.exactShape({
+      secretId: ow.string,
+      projectId: ow.string,
+    }))
+
+    this.secretId = options.secretId
+    this.projectId = options.projectId
+    this.encoding = 'utf8'
   }
 
-  async get() {
-    return this.doc.get().then(snapshot => snapshot.data().secret)
+  async read() {
+    const [version] = await this.accessSecretVersion()
+    return version.payload.data.toString(this.encoding)
   }
 
-  async set(secretValue) {
+  async write(secretValue) {
     ow(secretValue, ow.string)
-    return this.doc.set({
-      secret: secretValue,
+
+    // TODO: deal with adding a version to an existing secret
+    await this.createSecret()
+    return this.addSecretVersion(secretValue)
+  }
+
+  async createSecret() {
+    return this.client.createSecret({
+      secretId: this.secretId,
+      parent: `projects/${this.projectId}`,
+      secret: {
+        replication: {
+          automatic: {},
+        },
+      },
     })
   }
 
-  get doc() {
-    return this.collection.doc(this.secretName)
+  async addSecretVersion(secretValue) {
+    ow(secretValue, ow.string)
+
+    const data = Buffer.from(secretValue, this.encoding)
+    return this.client.addSecretVersion({
+      parent: `projects/${this.projectId}/secrets/${this.secretId}`,
+      payload: {
+        data,
+      },
+    })
   }
 
-  get collection() {
-    return this._collection || this.buildCollection()
+  async accessSecretVersion() {
+    return this.client.accessSecretVersion({
+      name: `projects/${this.projectId}/secrets/${this.secretId}/versions/latest`,
+    })
   }
 
-  buildCollection() {
-    this._collection = this.connection.collection('secrets')
-    return this._collection
-  }
-
-  get connection() {
-    return this._connection || this.buildDatabaseConnection()
-  }
-
-  buildDatabaseConnection() {
-    this._connection = new Firestore()
-    return this._connection
+  get client() { // eslint-disable-line class-methods-use-this
+    return new SecretManagerServiceClient()
   }
 }
 

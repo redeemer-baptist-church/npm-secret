@@ -1,1 +1,5 @@
-module.exports = require('./secret')
+Object.assign(
+  module.exports,
+  require('./secret'),
+  require('./secret-client'),
+)
